@@ -1,3 +1,7 @@
+## Unreleased
+### Bug fix
+* Restore scrolling and pointer interaction when a refresh rebound activity does not settle.
+
 ## 2.0.0
 ### Breaking Changes:
 * Remove onOffsetChange in SmartRefresher,autoLoad in RefreshConfiguration,scrollController in RefreshController

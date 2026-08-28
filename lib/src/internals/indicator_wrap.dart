@@ -6,10 +6,13 @@
 
 // ignore_for_file: INVALID_USE_OF_PROTECTED_MEMBER
 // ignore_for_file: INVALID_USE_OF_VISIBLE_FOR_TESTING_MEMBER
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'dart:math' as math;
+
 import '../smart_refresher.dart';
 import 'slivers.dart';
 
@@ -133,6 +136,11 @@ abstract class LoadIndicator extends StatefulWidget {
 abstract class RefreshIndicatorState<T extends RefreshIndicator>
     extends State<T>
     with IndicatorStateMixin<T, RefreshStatus>, RefreshProcessor {
+  static const Duration _reboundRecoveryTimeout = Duration(seconds: 2);
+
+  Timer? _reboundRecoveryTimer;
+  ScrollPosition? _reboundPosition;
+
   bool _inVisual() {
     return _position!.pixels < 0.0;
   }
@@ -270,7 +278,7 @@ abstract class RefreshIndicatorState<T extends RefreshIndicator>
             if (!_inVisual()) {
               mode = RefreshStatus.idle;
             } else {
-              activity!.delegate.goBallistic(0.0);
+              _startReboundRecovery();
             }
           }
         });
@@ -320,11 +328,67 @@ abstract class RefreshIndicatorState<T extends RefreshIndicator>
     return Future.delayed(widget.completeDuration);
   }
 
+  void _startReboundRecovery() {
+    final position = _position!;
+    _cancelReboundRecovery();
+    _reboundPosition = position;
+    position.isScrollingNotifier.addListener(_handleReboundActivityChange);
+    _reboundRecoveryTimer = Timer(_reboundRecoveryTimeout, () {
+      if (!mounted || !identical(_position, position)) {
+        _cancelReboundRecovery();
+        return;
+      }
+      if (mode == RefreshStatus.completed || mode == RefreshStatus.failed) {
+        // A stalled ballistic activity leaves Flutter's Scrollable ignoring
+        // pointers. End only that stale activity; normal rebounds finish via
+        // the isScrollingNotifier listener and keep their original animation.
+        activity?.delegate.goIdle();
+        mode = RefreshStatus.idle;
+      }
+      _cancelReboundRecovery();
+    });
+
+    activity!.delegate.goBallistic(0.0);
+    _handleReboundActivityChange();
+  }
+
+  void _handleReboundActivityChange() {
+    final position = _reboundPosition;
+    if (position == null || position.isScrollingNotifier.value) return;
+    if (mounted &&
+        (mode == RefreshStatus.completed || mode == RefreshStatus.failed)) {
+      mode = RefreshStatus.idle;
+    }
+    _cancelReboundRecovery();
+  }
+
+  void _cancelReboundRecovery() {
+    _reboundRecoveryTimer?.cancel();
+    _reboundRecoveryTimer = null;
+    _reboundPosition?.isScrollingNotifier
+        .removeListener(_handleReboundActivityChange);
+    _reboundPosition = null;
+  }
+
   bool needReverseAll() {
     return true;
   }
 
   void resetValue() {}
+
+  @override
+  void _onPositionUpdated(ScrollPosition newPosition) {
+    if (!identical(_reboundPosition, newPosition)) {
+      _cancelReboundRecovery();
+    }
+    super._onPositionUpdated(newPosition);
+  }
+
+  @override
+  void dispose() {
+    _cancelReboundRecovery();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -278,6 +278,56 @@ void main() {
     expect(_refreshController.headerStatus, RefreshStatus.refreshing);
   });
 
+  testWidgets("stalled rebound restores scrolling and pointer interaction",
+      (tester) async {
+    final controller = RefreshController();
+    var taps = 0;
+    await tester.pumpWidget(Directionality(
+      textDirection: TextDirection.ltr,
+      child: RefreshConfiguration(
+        springDescription: const SpringDescription(
+          mass: 2.2,
+          stiffness: 150,
+          damping: 0,
+        ),
+        child: SmartRefresher(
+          controller: controller,
+          header: TestHeader(),
+          child: ListView.builder(
+            itemCount: 20,
+            itemExtent: 100,
+            itemBuilder: (_, index) => GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => taps++,
+              child: Text('item $index'),
+            ),
+          ),
+        ),
+      ),
+    ));
+
+    await tester.drag(find.byType(Scrollable), const Offset(0, 100));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(controller.headerStatus, RefreshStatus.refreshing);
+
+    controller.refreshCompleted();
+    await tester.pump(const Duration(milliseconds: 499));
+    expect(controller.headerStatus, RefreshStatus.completed);
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(controller.headerStatus, RefreshStatus.idle);
+    await tester.tap(find.text('item 0'));
+    expect(taps, 1);
+
+    final beforeDrag = controller.position!.pixels;
+    await tester.drag(find.byType(Scrollable), const Offset(0, -200));
+    await tester.pump();
+    expect(controller.position!.pixels, greaterThan(beforeDrag));
+  });
+
   testWidgets("without refresh function ,only twoLevel", (tester) async {
     final RefreshController _refreshController = RefreshController();
     await tester.pumpWidget(Directionality(
