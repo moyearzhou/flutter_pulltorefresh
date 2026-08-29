@@ -5,9 +5,9 @@
 */
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter/foundation.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:pull_to_refresh/src/internals/slivers.dart';
 import 'internals/indicator_wrap.dart';
@@ -353,6 +353,7 @@ class SmartRefresherState extends State<SmartRefresher> {
             updateFlag: _updatePhysics ? 0 : 1,
             enableScrollWhenRefreshCompleted:
                 conf?.enableScrollWhenRefreshCompleted ?? false,
+            canDrag: _canDrag,
             maxUnderScrollExtent: conf?.maxUnderScrollExtent ??
                 (isBouncingPhysics ? double.infinity : 0.0),
             maxOverScrollExtent: conf?.maxOverScrollExtent ??
@@ -363,7 +364,7 @@ class SmartRefresherState extends State<SmartRefresher> {
                     : 0.0), // need to fix default value by ios or android later
             bottomHitBoundary: conf?.bottomHitBoundary ??
                 (isBouncingPhysics ? double.infinity : 0.0))
-        .applyTo(!_canDrag ? NeverScrollableScrollPhysics() : physics);
+        .applyTo(physics);
   }
 
   // build the customScrollView

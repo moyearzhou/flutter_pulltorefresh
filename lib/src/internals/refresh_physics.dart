@@ -29,6 +29,7 @@ class RefreshPhysics extends ScrollPhysics {
   final SpringDescription? springDescription;
   final double? dragSpeedRatio;
   final bool? enableScrollWhenTwoLevel, enableScrollWhenRefreshCompleted;
+  final bool canDrag;
   final RefreshController? controller;
   final int? updateFlag;
 
@@ -48,6 +49,7 @@ class RefreshPhysics extends ScrollPhysics {
       this.bottomHitBoundary,
       this.enableScrollWhenRefreshCompleted,
       this.enableScrollWhenTwoLevel,
+      this.canDrag = true,
       this.maxOverScrollExtent})
       : super(parent: parent);
 
@@ -59,6 +61,7 @@ class RefreshPhysics extends ScrollPhysics {
         springDescription: springDescription,
         dragSpeedRatio: dragSpeedRatio,
         enableScrollWhenTwoLevel: enableScrollWhenTwoLevel,
+        canDrag: canDrag,
         topHitBoundary: topHitBoundary,
         bottomHitBoundary: bottomHitBoundary,
         controller: controller,
@@ -86,8 +89,7 @@ class RefreshPhysics extends ScrollPhysics {
 
   @override
   bool shouldAcceptUserOffset(ScrollMetrics position) {
-    // TODO: implement shouldAcceptUserOffset
-    if (parent is NeverScrollableScrollPhysics) {
+    if (!canDrag || parent is NeverScrollableScrollPhysics) {
       return false;
     }
     return true;
@@ -109,7 +111,9 @@ class RefreshPhysics extends ScrollPhysics {
 
   @override
   double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
-    // TODO: implement applyPhysicsToUserOffset
+    // A drag may already be active when refresh completion disables input.
+    // Reject its remaining deltas without replacing the ScrollPosition.
+    if (!canDrag) return 0.0;
     viewportRender ??=
         findViewport(controller!.position?.context.storageContext);
     if (controller!.headerMode!.value == RefreshStatus.twoLeveling) {
@@ -144,9 +148,15 @@ class RefreshPhysics extends ScrollPhysics {
               (overscrollPast - offset.abs()) / position.viewportDimension)
           : frictionFactor(overscrollPast / position.viewportDimension);
       final double direction = offset.sign;
-      return direction *
+      final double result = direction *
           _applyFriction(overscrollPast, offset.abs(), friction) *
           (dragSpeedRatio ?? 1.0);
+      final double maxExpectedDelta =
+          offset.abs() * math.max((dragSpeedRatio ?? 1.0).abs(), 1.0);
+      if (!result.isFinite || result.abs() > maxExpectedDelta) {
+        return result.isFinite ? direction * maxExpectedDelta : 0.0;
+      }
+      return result;
     }
     return super.applyPhysicsToUserOffset(position, offset);
   }
@@ -164,8 +174,14 @@ class RefreshPhysics extends ScrollPhysics {
     return total + absDelta;
   }
 
-  double frictionFactor(double overscrollFraction) =>
-      0.52 * math.pow(1 - overscrollFraction, 2);
+  double frictionFactor(double overscrollFraction) {
+    // Trackpad deltas can temporarily exceed the viewport. The original
+    // quadratic grows again outside 0...1 and turns friction into exponential
+    // acceleration, so keep it in the physical domain it was designed for.
+    final double normalizedFraction =
+        overscrollFraction.clamp(0.0, 1.0).toDouble();
+    return 0.52 * math.pow(1 - normalizedFraction, 2);
+  }
 
   @override
   double applyBoundaryConditions(ScrollMetrics position, double value) {
@@ -286,17 +302,30 @@ class RefreshPhysics extends ScrollPhysics {
     if ((position.pixels > 0 &&
             controller!.headerMode!.value == RefreshStatus.twoLeveling) ||
         position.outOfRange) {
+      final double leadingExtent = position.minScrollExtent;
+      final double trailingExtent =
+          controller!.headerMode!.value == RefreshStatus.twoLeveling
+              ? 0.0
+              : position.maxScrollExtent;
+      final double recoveryExtent = math.max(position.viewportDimension, 1.0);
+      final double safePosition = position.pixels.isFinite
+          ? position.pixels
+              .clamp(leadingExtent - recoveryExtent,
+                  trailingExtent + recoveryExtent)
+              .toDouble()
+          : leadingExtent;
+      final double maxRecoveryVelocity = recoveryExtent * 20.0;
+      final double safeVelocity = velocity.isFinite
+          ? velocity.clamp(-maxRecoveryVelocity, maxRecoveryVelocity).toDouble()
+          : 0.0;
       return BouncingScrollSimulation(
         spring: springDescription ?? spring,
-        position: position.pixels,
+        position: safePosition,
         // -1.0 avoid stop springing back ,and release gesture
-        velocity: velocity * 0.91,
+        velocity: safeVelocity * 0.91,
         // TODO(abarth): We should move this constant closer to the drag end.
-        leadingExtent: position.minScrollExtent,
-        trailingExtent:
-            controller!.headerMode!.value == RefreshStatus.twoLeveling
-                ? 0.0
-                : position.maxScrollExtent,
+        leadingExtent: leadingExtent,
+        trailingExtent: trailingExtent,
         tolerance: tolerance,
       );
     }

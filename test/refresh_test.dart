@@ -4,6 +4,7 @@
     createTime: 2019-07-21 12:22
  */
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
@@ -12,6 +13,55 @@ import 'dataSource.dart';
 import 'test_indicator.dart';
 
 void main() {
+  group('overscroll numeric stability', () {
+    test('friction never becomes acceleration outside its physical domain', () {
+      final physics = RefreshPhysics();
+
+      for (final fraction in <double>[-1000, -1, 0, 0.5, 1, 2, 1000]) {
+        final friction = physics.frictionFactor(fraction);
+        expect(friction.isFinite, isTrue);
+        expect(friction, inInclusiveRange(0.0, 0.52));
+      }
+
+      expect(physics.frictionFactor(2), 0.0);
+      expect(physics.frictionFactor(-1), 0.52);
+    });
+
+    testWidgets('repeated macOS trackpad pulls keep the offset finite',
+        (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final controller = RefreshController();
+
+      await tester.pumpWidget(Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          width: 800,
+          height: 600,
+          child: RefreshConfiguration(
+            child: SmartRefresher(
+              controller: controller,
+              header: TestHeader(),
+              child: ListView.builder(
+                itemCount: 20,
+                itemExtent: 100,
+                itemBuilder: (_, index) => Text('item $index'),
+              ),
+            ),
+          ),
+        ),
+      ));
+
+      for (var index = 0; index < 20; index++) {
+        await tester.trackpadFling(
+            find.byType(Scrollable), const Offset(0, 600), 500);
+        await tester.pump(const Duration(milliseconds: 10));
+        expect(controller.position!.pixels.isFinite, isTrue);
+        expect(controller.position!.pixels.abs(), lessThan(1200));
+      }
+      debugDefaultTargetPlatformOverride = null;
+    });
+  });
+
   group("trigger refresh function test", () {
     testWidgets("not enough to tigger refresh ", (tester) async {
       final RefreshController _refreshController =
@@ -326,6 +376,62 @@ void main() {
     await tester.drag(find.byType(Scrollable), const Offset(0, -200));
     await tester.pump();
     expect(controller.position!.pixels, greaterThan(beforeDrag));
+  });
+
+  testWidgets(
+      "refresh completion keeps the scroll position stable during an active drag",
+      (tester) async {
+    final controller = RefreshController();
+    var taps = 0;
+    await tester.pumpWidget(Directionality(
+      textDirection: TextDirection.ltr,
+      child: RefreshConfiguration(
+        child: SmartRefresher(
+          controller: controller,
+          header: TestHeader(),
+          child: ListView.builder(
+            itemCount: 20,
+            itemExtent: 100,
+            itemBuilder: (_, index) => GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => taps++,
+              child: Text('item $index'),
+            ),
+          ),
+        ),
+      ),
+    ));
+
+    await tester.drag(find.byType(Scrollable), const Offset(0, 100));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(controller.headerStatus, RefreshStatus.refreshing);
+
+    final position = controller.position;
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(Scrollable)),
+    );
+    await gesture.moveBy(const Offset(0, 30));
+    await tester.pump();
+
+    controller.refreshCompleted();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+
+    expect(identical(controller.position, position), isTrue);
+    expect(controller.headerStatus, isNot(RefreshStatus.canRefresh));
+
+    await gesture.moveBy(const Offset(0, 30));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(controller.headerStatus, RefreshStatus.idle);
+    expect(controller.position!.pixels, closeTo(0.0, 0.01));
+    await tester.tap(find.text('item 0'));
+    expect(taps, 1);
+
+    await tester.drag(find.byType(Scrollable), const Offset(0, -200));
+    await tester.pump();
+    expect(controller.position!.pixels, greaterThan(0.0));
   });
 
   testWidgets("without refresh function ,only twoLevel", (tester) async {

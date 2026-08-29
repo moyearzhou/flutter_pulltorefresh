@@ -178,6 +178,7 @@ abstract class RefreshIndicatorState<T extends RefreshIndicator>
       return;
     }
     if (floating) return;
+    if (mode == RefreshStatus.completed || mode == RefreshStatus.failed) return;
     // no matter what activity is done, when offset ==0.0 and !floating,it should be set to idle for setting ifCanDrag
     if (offset == 0.0) {
       mode = RefreshStatus.idle;
