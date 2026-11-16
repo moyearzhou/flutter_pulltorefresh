@@ -95,7 +95,7 @@ class _MaterialClassicHeaderState
   @override
   void didUpdateWidget(covariant MaterialClassicHeader oldWidget) {
     // TODO: implement didUpdateWidget
-    _position = Scrollable.of(context)!.position;
+    _position = Scrollable.of(context).position;
     super.didUpdateWidget(oldWidget);
   }
 
@@ -113,7 +113,7 @@ class _MaterialClassicHeaderState
           alignment: Alignment.topCenter,
           child: RefreshProgressIndicator(
             semanticsLabel: widget.semanticsLabel ??
-                MaterialLocalizations?.of(context)
+                MaterialLocalizations.of(context)
                     .refreshIndicatorSemanticLabel,
             semanticsValue: widget.semanticsValue,
             value: floating ? null : _valueAni.value,
@@ -157,7 +157,7 @@ class _MaterialClassicHeaderState
   @override
   void didChangeDependencies() {
     final ThemeData theme = Theme.of(context);
-    _position = Scrollable.of(context)!.position;
+    _position = Scrollable.of(context).position;
     _valueColor = _positionController.drive(
       ColorTween(
         begin: (widget.color ?? theme.primaryColor).withOpacity(0.0),

@@ -1,3 +1,14 @@
+## 私有 pub 安装
+
+```yaml
+dependencies:
+  pull_to_refresh:
+    hosted: https://pub.zotpaper.cn
+    version: ^2.0.1
+```
+
+先配置私有仓库 token，再执行 `flutter pub get`。本地联调可使用不提交的 `pubspec_overrides.yaml`；发布验证使用无 override 的独立项目。
+
 # flutter_pulltorefresh
 <a href="https://pub.dev/packages/pull_to_refresh">
   <img src="https://img.shields.io/pub/v/pull_to_refresh.svg"/>

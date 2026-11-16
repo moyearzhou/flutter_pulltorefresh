@@ -425,7 +425,7 @@ class SmartRefresherState extends State<SmartRefresher> {
         dragStartBehavior: dragStartBehavior ?? DragStartBehavior.start,
         reverse: reverse ?? false,
       );
-    } else if (childView is Scrollable) {
+    } else {
       body = Scrollable(
         physics: _getScrollPhysics(
             conf, childView.physics ?? AlwaysScrollableScrollPhysics()),
@@ -511,7 +511,7 @@ class SmartRefresherState extends State<SmartRefresher> {
   void initState() {
     // TODO: implement initState
     if (widget.controller.initialRefresh) {
-      WidgetsBinding.instance!.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         //  if mounted,it avoid one situation: when init done,then dispose the widget before build.
         //  this   situation mostly TabBarView
         if (mounted) widget.controller.requestRefresh();
@@ -692,6 +692,7 @@ class RefreshController {
         headerMode!.value = RefreshStatus.refreshing;
       });
     }
+    return null;
   }
 
   /// make the header enter refreshing state,and callback onRefresh
@@ -763,7 +764,7 @@ class RefreshController {
       {Duration duration: const Duration(milliseconds: 500),
       Curve curve: Curves.linear}) {
     headerMode?.value = RefreshStatus.twoLevelClosing;
-    WidgetsBinding.instance!.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       position!
           .animateTo(0.0, duration: duration, curve: curve)
           .whenComplete(() {
@@ -786,7 +787,7 @@ class RefreshController {
   /// after data returned,set the footer state to idle
   void loadComplete() {
     // change state after ui update,else it will have a bug:twice loading
-    WidgetsBinding.instance!.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       footerMode?.value = LoadStatus.idle;
     });
   }
@@ -794,14 +795,14 @@ class RefreshController {
   /// If catchError happen,you may call loadFailed indicate fetch data from network failed
   void loadFailed() {
     // change state after ui update,else it will have a bug:twice loading
-    WidgetsBinding.instance!.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       footerMode?.value = LoadStatus.failed;
     });
   }
 
   /// load more success without error,but no data returned
   void loadNoData() {
-    WidgetsBinding.instance!.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       footerMode?.value = LoadStatus.noMore;
     });
   }
