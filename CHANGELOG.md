@@ -1,3 +1,13 @@
+## 2.0.1
+
+- Known validation limits on Flutter 3.38.8: 46 tests pass; the pre-existing overscroll-bound and two-level state assertions fail on the unchanged repair baseline as well. Accepted for this release. The legacy example targets Dart 2 and is excluded from the published package.
+
+- Publish to the private ZotPaper pub registry with installation metadata and package exclusions. Retain refresh rebound recovery, trackpad boundary and completion gesture race fixes from 0c271f3 and 98452ac.
+
+## Unreleased
+### Bug fix
+* Restore scrolling and pointer interaction when a refresh rebound activity does not settle.
+
 ## 2.0.0
 ### Breaking Changes:
 * Remove onOffsetChange in SmartRefresher,autoLoad in RefreshConfiguration,scrollController in RefreshController
